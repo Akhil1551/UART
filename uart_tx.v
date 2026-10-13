@@ -5,7 +5,6 @@ module uart_tx (
     // Data interface
     input  wire [7:0] tx_data,
     input  wire       tx_start,
-
     // Baud-rate timing
     // One tick = one UART bit period
     input  wire       tick,
