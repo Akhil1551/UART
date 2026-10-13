@@ -180,4 +180,4 @@ Waveform results for one `0x4B` frame in loopback:
 
 ## Author
 
-K Sai Akhil, M.Tech VLSI Design, Amrita Vishwa Vidyapeetham
+K Sai Akhil, M.Tech VLSI Design
