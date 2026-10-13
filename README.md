@@ -30,6 +30,7 @@ This design targets a 50 MHz system clock at 115,200 baud with 8 data bits, opti
 - 8-bit data, LSB first, 1 start bit, 1 stop bit
 - Optional parity, selectable even or odd
 - 16x oversampling receiver with false-start (glitch) rejection
+- Two receiver variants: `uart_rxs` (serial-verification output, used by `uart_top`) and `uart_rx` (parallel output at the stop bit)
 - Detection of parity error, framing error and break condition
 - All logic is synchronous to a single clock; ticks are enables, not divided clocks
 
@@ -39,8 +40,10 @@ This design targets a 50 MHz system clock at 115,200 baud with 8 data bits, opti
 | --- | --- | --- |
 | `baudgenerator.v` | `baudrate` | Two free-running counters producing `tx_tick` (1x baud) and `rx_tick` (16x baud) |
 | `uart_tx.v` | `uart_tx` | Transmitter FSM: IDLE, START, DATA, PARITY, STOP |
-| `uart_rx.v` | `uart_rx` | Receiver FSM: IDLE, START, DATA, PARITY, STOP, WAIT |
-| `uart_top.v` | `uart_top` | Top level wiring the baud generator, transmitter and receiver together |
+| `uart_rxs.v` | `uart_rxs` | Receiver FSM used by the top level. Writes `rx_data` one bit at a time as each bit is sampled, so the serial reception can be observed and verified in simulation |
+| `uart_rx.v` | `uart_rx` | Parallel-output receiver FSM. Assembles the byte in a shift register and presents `rx_data` only at the stop bit. Not instantiated by `uart_top`; same ports and error logic as `uart_rxs` |
+| `uart_top.v` | `uart_top` | Top level wiring the baud generator, transmitter and `uart_rxs` together |
+| `docs/uart_final.pptx` | | Project review presentation |
 
 ## Architecture
 
@@ -48,13 +51,13 @@ This design targets a 50 MHz system clock at 115,200 baud with 8 data bits, opti
             +-----------+  tx_tick   +---------+
  clk,rst_n->| baudrate  |----------->| uart_tx |--> txd
             |           |  rx_tick   +---------+
-            |           |----------->+---------+
-            +-----------+            | uart_rx |<-- rxd
-                                     +---------+--> rx_data, rx_valid,
-                                                    par_err, frm_err, brk
+            |           |----------->+----------+
+            +-----------+            | uart_rxs |<-- rxd
+                                     +----------+--> rx_data, rx_valid,
+                                                     par_err, frm_err, brk
 ```
 
-`uart_top` has no FIFOs, register interface or input synchronizer. `txd` comes straight from `uart_tx` and `rxd` goes straight into `uart_rx`.
+`uart_top` has no FIFOs, register interface or input synchronizer. `txd` comes straight from `uart_tx` and `rxd` goes straight into `uart_rxs`.
 
 ## Module details
 
@@ -95,7 +98,16 @@ Divisors are for the 16x receive tick: `divisor = f_clk / (16 x baud)`.
 - `tx_busy = (state != IDLE)`
 - `txd` is a register, so glitches cannot reach the pin; reset value is 1 (idle high)
 
-### Receiver (`uart_rx`)
+### Receiver (`uart_rxs` and `uart_rx`)
+
+Both receivers use the same FSM, timing and error logic. They differ only in how `rx_data` is produced:
+
+| Module | `rx_data` behaviour |
+| --- | --- |
+| `uart_rxs` | Each sampled bit is written directly into `rx_data[b_cnt]` (LSB first), so the byte fills in bit by bit during DATA. This makes serial reception easy to verify in the waveform. Used by `uart_top` |
+| `uart_rx` | Bits are shifted into an internal register and the whole byte is copied to `rx_data` at the stop bit |
+
+In both, `rx_valid` pulses once at the stop bit, and the byte is complete and valid at that point.
 
 | State | Action |
 | --- | --- |
@@ -157,9 +169,11 @@ Parameters: `CLK_FREQ` (default 50,000,000), `BAUD_RATE` (default 115,200), `OVE
 The design is verified in loopback (`txd` connected to `rxd` in the testbench) with the free [Icarus Verilog](https://steveicarus.github.io/iverilog/) simulator:
 
 ```sh
-iverilog -g2005 -o sim uart_top_tb.v uart_top.v baudgenerator.v uart_tx.v uart_rx.v
+iverilog -g2005 -o sim uart_top_tb.v uart_top.v baudgenerator.v uart_tx.v uart_rxs.v
 vvp sim
 ```
+
+`uart_rx.v` can be added to the command line if you want to simulate the parallel-output receiver on its own.
 
 The testbench is not yet part of this repository. It generates a 50 MHz clock, holds reset for 100 ns, sends `8'hA5` and `8'h3C` with parity disabled, and prints each received byte with its `par_err`, `frm_err` and `brk` flags.
 
@@ -168,6 +182,10 @@ Waveform results for one `0x4B` frame in loopback:
 - `txd` falls at 0.25 us; each bit lasts 8.64 us (27 x 16 x 20 ns)
 - The receiver enters DATA at 4.43 us, half a bit after the start edge
 - `rx_valid` pulses at 90.83 us with `rx_data = 0x4B`
+
+## Presentation
+
+The project review slides, including the architecture diagrams, receiver oversampling analysis and simulation waveforms (serial and parallel output), are in [`docs/uart_final.pptx`](docs/uart_final.pptx).
 
 ## Future scope
 
