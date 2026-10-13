@@ -2,9 +2,7 @@
 
 Design and verification of a synthesizable UART (Universal Asynchronous Receiver Transmitter) with a programmable-by-parameter baud rate, optional even/odd parity, 16x oversampled reception, and parity, framing and break error detection.
 
-Project review work for M.Tech VLSI Design, Amrita Vishwa Vidyapeetham.
-
-**Team:** K Sai Akhil, Indiresh, Hemanth B R, Hanuman K, B Vallabha
+Project review work for M.Tech VLSI Design.
 
 ## Overview
 
@@ -195,7 +193,3 @@ The project review slides, including the architecture diagrams, receiver oversam
 - Configurable data bits (5 to 9) and stop bits (1, 1.5, 2)
 - FIFO buffering for continuous transfers
 - Expanded verification: parity-enabled cases, framing error, break detection and clock-skew scenarios
-
-## Author
-
-K Sai Akhil, M.Tech VLSI Design
